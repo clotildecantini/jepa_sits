@@ -17,12 +17,10 @@ from src.models.utils.pos_embs import get_2d_sincos_pos_embed, get_3d_sincos_pos
 from src.utils.tensors import trunc_normal_
 from src.masks.utils import apply_masks
 
-from data_processing import CreatePatchesForVideoBatch
 from planar_representation import *
-from data_processing.preprocessing_video import (
-    CreatePatchesForVideo,
-    ToSTRforVideo,
-    ToSTRforVideoBatch,
+from data_processing.batch_operations import (
+    CreatePatchesFromCubes,
+    ToSTRforCubes
 )
 
 
@@ -186,24 +184,19 @@ class VisionTransformer(nn.Module):
             pos_embed = self.interpolate_pos_encoding(x, pos_embed)
             # Tokenize input
 
-        x = self.patch_embed(x)
-        if pos_embed is not None:
-            x += pos_embed
-        B, N, D = x.shape
-        #
-        # x = x.permute(0, 2, 3, 4, 1)
-        # sample = {"data": x}
-        # sample = CreatePatchesForVideoBatch(patch_size=int(self.patch_size))(sample)
-        # curve_generator = MixCurveGenerator(
-        #     ["random", "spiral", "snake", "hilbert"], self.patch_size * self.patch_size
-        # )
-        # sample = ToSTRforVideoBatch(curve_generator=curve_generator)(sample)
-        # x = sample["data"]
-        # x = x.view(x.shape[0], x.shape[1], x.shape[2] * x.shape[3])
-        # x = self.linear_proj(x)
+        # x = self.patch_embed(x)
         # if pos_embed is not None:
         #     x += pos_embed
         # B, N, D = x.shape
+        #
+        x = x.permute(0, 2, 3, 4, 1)
+        x, _ = CreatePatchesFromCubes(int(self.patch_size),  int(self.patch_size), int(self.tubelet_size) )(x)
+        x, _ = ToSTRforCubes(curve_generator=MixCurveGenerator(['spiral', 'random', 'snake', 'hilbert']))(x)
+        x = x.view(x.shape[0], x.shape[1], x.shape[2] * x.shape[3])
+        x = self.linear_proj(x)
+        if pos_embed is not None:
+            x += pos_embed
+        B, N, D = x.shape
 
         # Mask away unwanted tokens (if masks provided)
         if masks is not None:
